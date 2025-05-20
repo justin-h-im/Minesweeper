@@ -35,27 +35,7 @@ typedef struct _task{
 // task array size define
 #define NUM_TASKS 1
 
-// // pin defines
-// /*
-//   PB0 -> Joystick Vrx
-//   PB1 -> Joystick Vry
-//   PB3 -> LCD SDA Pin		
-//   PB5-> LCD SCK Pin
-
-//   PC0 -> LCD LED Pin
-//   PC1 -> LCD A0 Pin
-//   PC2 -> LCD Reset Pin
-//   PC3 -> LCD CS Pin
-//   PC4 -> I2C SDA
-//   PC5 -> I2C SCL
-
-//   PD2 -> Start Button
-//   PD3 -> Reset Button
-//   PD4 -> “1 or 2” Player Button
-//   PD5 -> Select Button
-//   PD6 -> Buzzer Output
-// */
-
+// pin defines
 // Port B
 #define JOYSTICK_VRX PB0
 #define JOYSTICK_VRY PB1
@@ -83,18 +63,39 @@ typedef struct _task{
 #define RASET 0x2B
 #define RAMWR 0x2C
 
+// dimension defines
+#define LCD_WIDTH 129
+#define LCD_HEIGHT 128
 
 // period definitions
+const unsigned long LCD_PERIOD = 50;
 const unsigned long GCD_PERIOD = 50;
 
-// // task array
+// task array
 task tasks[NUM_TASKS];
 
-// // task enums
+// task enums
+enum LCD_States { LCD_Init, LCD_Display };
 
-
-// // task definitions
-
+// task definitions
+int LCD_Tick(int state) {
+  switch (state) {
+    case LCD_Init:
+      // Initialize the LCD
+      lcdInit();
+      state = LCD_Display;
+      break;
+    case LCD_Display:
+      // Display something on the LCD
+      fillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, 0xF800); // Fill screen with red
+      state = LCD_Display; // Stay in this state
+      break;
+    default:
+      state = LCD_Init; // Default to initialization
+      break;
+  }
+  return state;
+}
 
 // executes tasks
 void TimerISR() {   
@@ -118,18 +119,19 @@ int main() {
 
   // LCD initialization
   lcdInit();
-  fillRect(0, 0, 127, 127, 0xF800);
-  // test, fill the screen with red
 
   // concurrent fsm task initialization
+  tasks[0].state = LCD_Init; // Task initial state
+  tasks[0].period = GCD_PERIOD; // Task period
+  tasks[0].elapsedTime = tasks[0].period; // Task elapsed time
+  tasks[0].TickFct = &LCD_Tick; // Task tick function
 
   // timer initialization
-  // TimerSet(GCD_PERIOD);
-  // TimerOn();
-
+  TimerSet(GCD_PERIOD);
+  TimerOn();
 
   // main loop (should never reach here)
-  while (1) { fillRect(0, 0, 127, 127, 0x001F); }  // fill screen with red
+  while (1) { }  // fill screen with red
 
   return 0;
 }
