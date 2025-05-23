@@ -81,7 +81,7 @@ void fillRect(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint16_t color);
 
 // global variables
 cell grid[8][8]; // 8x8 grid of cells
-graphic emptyUnflaggedGrid = {{
+graphic emptyUnrevealedGrid = {{
     { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
     { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
     { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
@@ -98,6 +98,26 @@ graphic emptyUnflaggedGrid = {{
     { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
     { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
     { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+}};
+
+graphic emptyRevealedGrid = {{
+    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+
 }};
 
 graphic number1Grid = {{
@@ -136,6 +156,12 @@ graphic number2Grid = {{
     { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
     { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, BROWN, BROWN, BLACK },
     { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+}};
+
+graphic number3Grid = {{
+    {},
+
+
 }};
 
 
@@ -226,7 +252,7 @@ void lcdInit() {
             grid[i][j].status = EMPTY;
             grid[i][j].revealed = false;
             grid[i][j].flagged = false;
-            grid[i][j].gfx = &emptyUnflaggedGrid;
+            grid[i][j].gfx = &emptyUnrevealedGrid;
         }
     }
 }
@@ -261,27 +287,33 @@ void drawScreen() {
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
             if (grid[i][j].revealed == false) {
-                drawSquare((16 * i) + 4, (16 * j) + 4, &emptyUnflaggedGrid);
+                drawSquare((16 * i) + 4, (16 * j) + 4, &emptyUnrevealedGrid);
             }
-            else {
-                if (grid[i][j].status == NUMBER_1) {
-                    grid[i][j].gfx = &number1Grid;
-                }
-                else if (grid[i][j].status == NUMBER_2) {
-                    grid[i][j].gfx = &number2Grid;
-                }
-                else if (grid[i][j].status == NUMBER_3) {
-                    grid[i][j].gfx = &number2Grid;
-                }
-                else if (grid[i][j].status == EXPLODED_MINE) {
-                    grid[i][j].gfx = &number2Grid;
-                }
-                else if (grid[i][j].status == FLAG) {
-                    grid[i][j].gfx = &number2Grid;
-                }
-                // draw the square
-                drawSquare((16 * i) + 4, (16 * j) + 4, &number2Grid);
+            else if (grid[i][j].revealed == true) {
+                drawSquare((16 * i) + 4, (16 * j) + 4, &emptyRevealedGrid);
             }
+            // else {
+            //     if (grid[i][j].status == EMPTY) {
+            //         grid[i]
+            //     }
+            //     else if (grid[i][j].status == NUMBER_1) {
+            //         grid[i][j].gfx = &number1Grid;
+            //     }
+            //     else if (grid[i][j].status == NUMBER_2) {
+            //         grid[i][j].gfx = &number2Grid;
+            //     }
+            //     else if (grid[i][j].status == NUMBER_3) {
+            //         grid[i][j].gfx = &number2Grid;
+            //     }
+            //     else if (grid[i][j].status == EXPLODED_MINE) {
+            //         grid[i][j].gfx = &number2Grid;
+            //     }
+            //     else if (grid[i][j].status == FLAG) {
+            //         grid[i][j].gfx = &number2Grid;
+            //     }
+            //     // draw the square
+            //     drawSquare((16 * i) + 4, (16 * j) + 4, &number2Grid);
+            // }
 
         }
     }
