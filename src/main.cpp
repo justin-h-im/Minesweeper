@@ -21,10 +21,11 @@ typedef struct _task{
 } task;
 
 // task array size define
-#define NUM_TASKS 1
+#define NUM_TASKS 2
 
 // period definitions
 const unsigned long LCD_PERIOD = 50;
+const unsigned long JOYSTICK_PERIOD = 50;
 const unsigned long GCD_PERIOD = 50;
 
 // task array
@@ -32,6 +33,7 @@ task tasks[NUM_TASKS];
 
 // task enums
 enum LCD_States { LCD_Init, LCD_Display };
+enum Joystick_States { Joystick_Run };
 
 // task definitions
 int LCD_Tick(int state) {
@@ -43,6 +45,10 @@ int LCD_Tick(int state) {
       break;
     // within here, update depending on inputs from joystick, buttons, etc
     case LCD_Display:
+
+      // check selection
+      grid[gridX][gridY].selected = true;
+
       // Display something on the LCD
       drawScreen();
       state = LCD_Display; // Stay in this state
@@ -50,6 +56,49 @@ int LCD_Tick(int state) {
     default:
       break;
   }
+  return state;
+}
+
+int Joystick_Tick(int state) {
+  static uint8_t prevGridX = 0;
+  static uint8_t prevGridY = 0;
+
+
+  switch (state) {
+    case Joystick_Run:
+      // read inputs
+      uint16_t x = ADC_read(JOYSTICK_VRX);
+      uint16_t y = ADC_read(JOYSTICK_VRY);
+      // serial_println(map_value(0, 1023, 0, 2, x));
+      // serial_println(map_value(0, 1023, 0, 2, y));
+      
+      if (map_value(0, 1023, 0, 2, x) == 2 && (gridX <= 7)) {
+        gridX++;
+      } else if (map_value(0, 1023, 0, 2, x) == 0 && (gridX > 0)) {
+        gridX--;
+      }
+      
+      if (map_value(0, 1023, 0, 2, y) == 2 && (gridY <= 7)) {
+        gridY++;
+      } else if (map_value(0, 1023, 0, 2, y) == 0 && (gridY > 0)) {
+        gridY--;
+      }
+
+      serial_println(gridX);
+      serial_println(gridY);
+      // output
+      grid[prevGridX][prevGridY].selected = false;
+      grid[gridX][gridY].selected = true;
+
+      // Process joystick input
+      // ...
+      state = Joystick_Run; // Stay in this state
+      break;
+    default:
+      break;
+  }
+  prevGridX = gridX;
+  prevGridY = gridY;
   return state;
 }
 
@@ -73,14 +122,25 @@ int main() {
   // gpio initialization
   gpioInit();
 
+  // ADC initialization
+  ADC_init();
+
   // LCD initialization
   lcdInit();
 
+  // serial initialization
+  serial_init(9600);
+
   // concurrent fsm task initialization
   tasks[0].state = LCD_Init; // Task initial state
-  tasks[0].period = GCD_PERIOD; // Task period
+  tasks[0].period = LCD_PERIOD; // Task period
   tasks[0].elapsedTime = tasks[0].period; // Task elapsed time
   tasks[0].TickFct = &LCD_Tick; // Task tick function
+
+  tasks[1].state = Joystick_Run; // Task initial state
+  tasks[1].period = JOYSTICK_PERIOD; // Task period
+  tasks[1].elapsedTime = tasks[1].period; // Task elapsed time
+  tasks[1].TickFct = &Joystick_Tick; // Task tick function
 
   // timer initialization
   TimerSet(GCD_PERIOD);

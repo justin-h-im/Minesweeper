@@ -24,6 +24,7 @@ typedef struct _cell {
     CellStatus status;
     bool revealed = false;
     bool flagged = false;
+    bool selected = false;
     graphic *gfx;
 } cell;
 
@@ -36,24 +37,24 @@ void fillRect(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint16_t color);
 
 // pin defines
 // Port B
-#define JOYSTICK_VRX PB0
-#define JOYSTICK_VRY PB1
+#define JOYSTICK_VRX PC0
+#define JOYSTICK_VRY PC1
 #define LCD_SDA PB3 // LCD Data Pin (MOSI) (output)
 #define LCD_SCK PB5 // LCD Clock Pin (output)
 
 // Port C
-#define LCD_LED PC0 // (output)
-#define LCD_A0 PC1 // (output)
-#define LCD_RESET PC2 // (output)
-#define LCD_CS PC3 // LCD Chip Select (SS) (output)
+// #define LCD_LED PB4 // (output)
+#define LCD_A0 PB0 // (output)
+#define LCD_RESET PB1 // (output)
+#define LCD_CS PB2 // LCD Chip Select (SS) (output)
 #define I2C_SDA PC4
 #define I2C_SCL PC5
 
 // Port D
-#define START_BUTTON PD2
-#define RESET_BUTTON PD3
-#define PLAYER_BUTTON PD4
-#define SELECT_BUTTON PD5
+// #define START_BUTTON PD2
+// #define RESET_BUTTON PD3
+// #define PLAYER_BUTTON PD4
+// #define SELECT_BUTTON PD5
 #define BUZZER PD6
 
 // LCD command defines
@@ -164,59 +165,65 @@ graphic number3Grid = {{
 
 }};
 
+uint8_t gridX = 0;
+uint8_t gridY = 0;
 
 // send command to the LCD
 void spiWriteCommand(uint8_t command) {
   // pull A0 low to specify command
-  PORTC &= ~(1 << LCD_A0);
+  PORTB &= ~(1 << LCD_A0);
   // pull cs low
-  PORTC &= ~(1 << LCD_CS);
+  PORTB &= ~(1 << LCD_CS);
   
   // send command, wait for transmission to complete
   SPDR = command;
   while (!(SPSR & (1 << SPIF))); 
 
   // pull cs high
-  PORTC |= (1 << LCD_CS);
+  PORTB |= (1 << LCD_CS);
 }
 
 // send data to the LCD
 void spiWriteData(uint8_t data) {
   // pull A0 high to specify data
-  PORTC |= (1 << LCD_A0);
+  PORTB |= (1 << LCD_A0);
   // pull cs low
-  PORTC &= ~(1 << LCD_CS);
+  PORTB &= ~(1 << LCD_CS);
   
   // send data, wait for transmission to complete
   SPDR = data;
   while (!(SPSR & (1 << SPIF))); 
 
   // pull cs high
-  PORTC |= (1 << LCD_CS);
+  PORTB |= (1 << LCD_CS);
 }
 
 // GPIO initialization, call before tasks in main
 void gpioInit() {
-  // SPI pins
-  // configure SCK and MOSI as output
-  DDRB |= (1 << LCD_SCK) | (1 << LCD_SDA) | (1 << PB2);;
-  // configure LED, A0, Reset, and CS as output
-  DDRC |= (1 << LCD_LED) | (1 << LCD_A0) | (1 << LCD_RESET) | (1 << LCD_CS);
+    // SPI pins
+    // configure SCK and MOSI as output
+    DDRB |= (1 << PB2);
+    DDRB |= (1 << LCD_SCK) | (1 << LCD_SDA);
+    // configure LED, A0, Reset, and CS as output
+    DDRB |= (1 << LCD_A0) | (1 << LCD_RESET) | (1 << LCD_CS);
 
-  // GPIO initialization, refer to datasheet for details
-  // Set pins as input or output
-  // Set pull-up resistors if needed
-  // Set initial states for outputs
-  // etc.
+    // configure joystick pins as input
+    DDRC &= ~(1 << JOYSTICK_VRX) & ~(1 << JOYSTICK_VRY);
 
-  PORTC |= (1 << PB2); // pull SS
-  PORTC |= (1 << LCD_CS); // pull cs high
-  PORTC |= (1 << LCD_A0); // pull A0 high
-  PORTC |= (1 << LCD_RESET); // pull reset high
+    // GPIO initialization, refer to datasheet for details
+    // Set pins as input or output
+    // Set pull-up resistors if needed
+    // Set initial states for outputs
+    // etc.
 
-  // enable spi, set as master
-  SPCR = (1<<SPE) | (1<<MSTR);
-  // SPSR = (1 << SPI2X);
+    PORTB |= (1 << PB2); // pull SS
+    PORTB |= (1 << LCD_CS); // pull cs high
+    PORTB |= (1 << LCD_A0); // pull A0 high
+    PORTB |= (1 << LCD_RESET); // pull reset high
+
+    // enable spi, set as master
+    SPCR = (1<<SPE) | (1<<MSTR);
+    // SPSR = (1 << SPI2X);
 }
 
 // LCD initialization
@@ -224,9 +231,9 @@ void lcdInit() {
     // lcd initialization, refer to st7735 datasheet for details
 
     // hardware reset
-    PORTC &= ~(1 << LCD_RESET); // bring reset low
+    PORTB &= ~(1 << LCD_RESET); // bring reset low
     _delay_ms(200);
-    PORTC |= (1 << LCD_RESET); // bring reset high
+    PORTB |= (1 << LCD_RESET); // bring reset high
     _delay_ms(200);
 
     // initialize SPI
@@ -252,6 +259,7 @@ void lcdInit() {
             grid[i][j].status = EMPTY;
             grid[i][j].revealed = false;
             grid[i][j].flagged = false;
+            grid[i][j].selected = false;
             grid[i][j].gfx = &emptyUnrevealedGrid;
         }
     }
@@ -286,34 +294,21 @@ void drawScreen() {
     // spiWriteCommand(RAMWR);
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
-            if (grid[i][j].revealed == false) {
-                drawSquare((16 * i) + 4, (16 * j) + 4, &emptyUnrevealedGrid);
-            }
-            else if (grid[i][j].revealed == true) {
-                drawSquare((16 * i) + 4, (16 * j) + 4, &emptyRevealedGrid);
-            }
-            // else {
-            //     if (grid[i][j].status == EMPTY) {
-            //         grid[i]
+            graphic *g = &emptyUnrevealedGrid;
+            if (grid[i][j].selected)  g = &number1Grid;
+            // else if (grid[i][j].selected) g = &number1Grid;
+            // draw base square
+            // if (grid[i][j].revealed == false) {
+            //     if (grid[i][j].selected == true) {
+            //         // draw the selected square
+            //         g = &number1Grid;
             //     }
-            //     else if (grid[i][j].status == NUMBER_1) {
-            //         grid[i][j].gfx = &number1Grid;
-            //     }
-            //     else if (grid[i][j].status == NUMBER_2) {
-            //         grid[i][j].gfx = &number2Grid;
-            //     }
-            //     else if (grid[i][j].status == NUMBER_3) {
-            //         grid[i][j].gfx = &number2Grid;
-            //     }
-            //     else if (grid[i][j].status == EXPLODED_MINE) {
-            //         grid[i][j].gfx = &number2Grid;
-            //     }
-            //     else if (grid[i][j].status == FLAG) {
-            //         grid[i][j].gfx = &number2Grid;
-            //     }
-            //     // draw the square
-            //     drawSquare((16 * i) + 4, (16 * j) + 4, &number2Grid);
             // }
+            // else if (grid[i][j].revealed == true) {
+            //     g = &emptyRevealedGrid;
+            // }
+
+            drawSquare((16 * i) + 4, (16 * j) + 4, g);
 
         }
     }
