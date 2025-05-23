@@ -22,8 +22,8 @@ typedef struct _graphic {
 
 typedef struct _cell {
     CellStatus status;
-    bool revealed;
-    bool flagged;
+    bool revealed = false;
+    bool flagged = false;
     graphic *gfx;
 } cell;
 
@@ -75,10 +75,13 @@ void fillRect(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint16_t color);
 #define BLUE 0x001F
 #define RED 0xF800
 #define GREEN 0x07E0
+#define YELLOW 0xFFE0
+#define BROWN 0x7B00
+#define PURPLE 0xF81F
 
 // global variables
 cell grid[8][8]; // 8x8 grid of cells
-graphic emptyGrid = {{
+graphic emptyUnflaggedGrid = {{
     { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
     { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
     { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
@@ -96,6 +99,45 @@ graphic emptyGrid = {{
     { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
     { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
 }};
+
+graphic number1Grid = {{
+    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BLUE, BLUE, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+}};
+
+graphic number2Grid = {{
+    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, BROWN, BROWN, BLACK },
+    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
+}};
+
 
 // send command to the LCD
 void spiWriteCommand(uint8_t command) {
@@ -184,7 +226,7 @@ void lcdInit() {
             grid[i][j].status = EMPTY;
             grid[i][j].revealed = false;
             grid[i][j].flagged = false;
-            grid[i][j].gfx = &emptyGrid;
+            grid[i][j].gfx = &emptyUnflaggedGrid;
         }
     }
 }
@@ -214,20 +256,33 @@ void drawSquare(uint8_t x0, uint8_t y0, graphic *gfx) {
 }
 
 void drawScreen() {
-    // spiWriteCommand(CASET);
-    // spiWriteData(0x00); spiWriteData(3);
-    // spiWriteData(0x00); spiWriteData(LCD_WIDTH);
-
-    // spiWriteCommand(RASET);
-    // spiWriteData(0x00); spiWriteData(3);
-    // spiWriteData(0x00); spiWriteData(LCD_HEIGHT);
-
-
     // draw the screen
     // spiWriteCommand(RAMWR);
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
-            drawSquare((16 * i) + 4, (16 * j) + 4, &emptyGrid);
+            if (grid[i][j].revealed == false) {
+                drawSquare((16 * i) + 4, (16 * j) + 4, &emptyUnflaggedGrid);
+            }
+            else {
+                if (grid[i][j].status == NUMBER_1) {
+                    grid[i][j].gfx = &number1Grid;
+                }
+                else if (grid[i][j].status == NUMBER_2) {
+                    grid[i][j].gfx = &number2Grid;
+                }
+                else if (grid[i][j].status == NUMBER_3) {
+                    grid[i][j].gfx = &number2Grid;
+                }
+                else if (grid[i][j].status == EXPLODED_MINE) {
+                    grid[i][j].gfx = &number2Grid;
+                }
+                else if (grid[i][j].status == FLAG) {
+                    grid[i][j].gfx = &number2Grid;
+                }
+                // draw the square
+                drawSquare((16 * i) + 4, (16 * j) + 4, &number2Grid);
+            }
+
         }
     }
 }
