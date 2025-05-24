@@ -54,7 +54,7 @@ void fillRect(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint16_t color);
 // #define START_BUTTON PD2
 // #define RESET_BUTTON PD3
 // #define PLAYER_BUTTON PD4
-// #define SELECT_BUTTON PD5
+#define SELECT_BUTTON PC2
 #define BUZZER PD6
 
 // LCD command defines
@@ -208,13 +208,7 @@ void gpioInit() {
     DDRB |= (1 << LCD_A0) | (1 << LCD_RESET) | (1 << LCD_CS);
 
     // configure joystick pins as input
-    DDRC &= ~(1 << JOYSTICK_VRX) & ~(1 << JOYSTICK_VRY);
-
-    // GPIO initialization, refer to datasheet for details
-    // Set pins as input or output
-    // Set pull-up resistors if needed
-    // Set initial states for outputs
-    // etc.
+    DDRC &= ~(1 << JOYSTICK_VRX) & ~(1 << JOYSTICK_VRY) & ~(1 << SELECT_BUTTON);
 
     PORTB |= (1 << PB2); // pull SS
     PORTB |= (1 << LCD_CS); // pull cs high
@@ -295,19 +289,7 @@ void drawScreen() {
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
             graphic *g = &emptyUnrevealedGrid;
-            if (grid[i][j].selected)  g = &number1Grid;
-            // else if (grid[i][j].selected) g = &number1Grid;
-            // draw base square
-            // if (grid[i][j].revealed == false) {
-            //     if (grid[i][j].selected == true) {
-            //         // draw the selected square
-            //         g = &number1Grid;
-            //     }
-            // }
-            // else if (grid[i][j].revealed == true) {
-            //     g = &emptyRevealedGrid;
-            // }
-
+            if (grid[i][j].selected) g = &number1Grid;
             drawSquare((16 * i) + 4, (16 * j) + 4, g);
 
         }

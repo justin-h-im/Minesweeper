@@ -24,9 +24,9 @@ typedef struct _task{
 #define NUM_TASKS 2
 
 // period definitions
-const unsigned long LCD_PERIOD = 50;
-const unsigned long JOYSTICK_PERIOD = 50;
-const unsigned long GCD_PERIOD = 50;
+const unsigned long LCD_PERIOD = 10;
+const unsigned long JOYSTICK_PERIOD = 20;
+const unsigned long GCD_PERIOD = 10;
 
 // task array
 task tasks[NUM_TASKS];
@@ -39,7 +39,7 @@ enum Joystick_States { Joystick_Run };
 int LCD_Tick(int state) {
   switch (state) {
     case LCD_Init:
-      // Initialize the LCD
+      // initialize the LCD
       lcdInit();
       state = LCD_Display;
       break;
@@ -49,7 +49,7 @@ int LCD_Tick(int state) {
       // check selection
       grid[gridX][gridY].selected = true;
 
-      // Display something on the LCD
+      // display something on the LCD
       drawScreen();
       state = LCD_Display; // Stay in this state
       break;
@@ -62,7 +62,8 @@ int LCD_Tick(int state) {
 int Joystick_Tick(int state) {
   static uint8_t prevGridX = 0;
   static uint8_t prevGridY = 0;
-
+  static uint8_t prevSelect = 0;
+  uint8_t press = GetBit(PORTC,PC2);
 
   switch (state) {
     case Joystick_Run:
@@ -84,15 +85,15 @@ int Joystick_Tick(int state) {
         gridY--;
       }
 
+
+
       serial_println(gridX);
       serial_println(gridY);
       // output
       grid[prevGridX][prevGridY].selected = false;
       grid[gridX][gridY].selected = true;
 
-      // Process joystick input
-      // ...
-      state = Joystick_Run; // Stay in this state
+      state = Joystick_Run; 
       break;
     default:
       break;
