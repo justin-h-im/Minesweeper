@@ -24,8 +24,8 @@ typedef struct _task{
 #define NUM_TASKS 2
 
 // period definitions
-const unsigned long LCD_PERIOD = 10;
-const unsigned long JOYSTICK_PERIOD = 20;
+const unsigned long LCD_PERIOD = 20;
+const unsigned long JOYSTICK_PERIOD = 30;
 const unsigned long GCD_PERIOD = 10;
 
 // task array
@@ -46,9 +46,6 @@ int LCD_Tick(int state) {
     // within here, update depending on inputs from joystick, buttons, etc
     case LCD_Display:
 
-      // check selection
-      grid[gridX][gridY].selected = true;
-
       // display something on the LCD
       drawScreen();
       state = LCD_Display; // Stay in this state
@@ -62,42 +59,93 @@ int LCD_Tick(int state) {
 int Joystick_Tick(int state) {
   static uint8_t prevGridX = 0;
   static uint8_t prevGridY = 0;
-  static uint8_t prevSelect = 0;
-  uint8_t press = GetBit(PORTC,PC2);
+  static uint8_t prevPress = 0;
+  static uint8_t debounceCounter = 0;
+  static uint16_t x_filter = 512;  // Running average for X
+  static uint16_t y_filter = 512;  // Running average for Y
+  uint8_t press = !GetBit(PINC,2);
 
   switch (state) {
     case Joystick_Run:
-      // read inputs
-      uint16_t x = ADC_read(JOYSTICK_VRX);
-      uint16_t y = ADC_read(JOYSTICK_VRY);
-      // serial_println(map_value(0, 1023, 0, 2, x));
-      // serial_println(map_value(0, 1023, 0, 2, y));
+      // Read raw ADC values
+      uint16_t x_raw = ADC_read(JOYSTICK_VRX);
+      uint16_t y_raw = ADC_read(JOYSTICK_VRY);
       
-      if (map_value(0, 1023, 0, 2, x) == 2 && (gridX <= 7)) {
-        gridX++;
-      } else if (map_value(0, 1023, 0, 2, x) == 0 && (gridX > 0)) {
-        gridX--;
+      // Simple low-pass filter to reduce noise
+      x_filter = (x_filter * 3 + x_raw) / 4;
+      y_filter = (y_filter * 3 + y_raw) / 4;
+      
+      // Use wider dead zones for more stable operation
+      // Create 5 zones: 0=left/up, 1=dead, 2=center, 3=dead, 4=right/down
+      uint8_t x_zone = 2; // Default to center
+      uint8_t y_zone = 2; // Default to center
+      
+      if (x_filter < 300) {
+        x_zone = 0;  // Left
+      } else if (x_filter > 723) {
+        x_zone = 4;  // Right
       }
       
-      if (map_value(0, 1023, 0, 2, y) == 2 && (gridY <= 7)) {
-        gridY++;
-      } else if (map_value(0, 1023, 0, 2, y) == 0 && (gridY > 0)) {
-        gridY--;
+      if (y_filter < 300) {
+        y_zone = 0;  // Up
+      } else if (y_filter > 723) {
+        y_zone = 4;  // Down
+      }
+      
+      // Debug output
+      serial_println(x_zone);
+      serial_println(y_zone);
+      
+      // Process movement with debouncing
+      if (debounceCounter > 0) {
+        debounceCounter--;
+      } else {
+        // X movement with proper bounds
+        if (x_zone == 4 && gridX < 7) {  // Right
+          gridX++;
+          debounceCounter = 3; // Longer debounce for smoother movement
+        } else if (x_zone == 0 && gridX > 0) {  // Left
+          gridX--;
+          debounceCounter = 3;
+        }
+        
+        // Y movement with proper bounds
+        if (y_zone == 4 && gridY < 7) {  // Down
+          gridY++;
+          debounceCounter = 3;
+        } else if (y_zone == 0 && gridY > 0) {  // Up
+          gridY--;
+          debounceCounter = 3;
+        }
       }
 
 
-
-      serial_println(gridX);
-      serial_println(gridY);
-      // output
+      // Clear previous selection and set new one
       grid[prevGridX][prevGridY].selected = false;
       grid[gridX][gridY].selected = true;
+      
+      // Check if the joystick is pressed
+      if (press && !prevPress) {
+        // if pressed, toggle the revealed state
+        if (!grid[gridX][gridY].revealed) {
+          grid[gridX][gridY].revealed = !grid[gridX][gridY].revealed;
+          grid[gridX][gridY].selected = false;
+        }
+
+      }
+      
+      serial_println(gridX);
+      serial_println(gridY);
+      serial_println(press && !prevPress);
+
+
 
       state = Joystick_Run; 
       break;
     default:
       break;
   }
+  prevPress = press;
   prevGridX = gridX;
   prevGridY = gridY;
   return state;
@@ -148,8 +196,8 @@ int main() {
   TimerOn();
 
   // main loop (should never reach here)
-  while (1) { }  // fill screen with red
-
+  while (1) { }
+  
   return 0;
 }
 
