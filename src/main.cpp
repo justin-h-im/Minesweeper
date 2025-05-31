@@ -41,6 +41,7 @@ int LCD_Tick(int state) {
     case LCD_Init:
       // initialize the LCD
       lcdInit();
+      initGrid();
       state = LCD_Display;
       break;
     // within here, update depending on inputs from joystick, buttons, etc
@@ -92,9 +93,9 @@ int Joystick_Tick(int state) {
         y_zone = 4;  // Down
       }
       
-      // Debug output
-      serial_println(x_zone);
-      serial_println(y_zone);
+      // // Debug output
+      // serial_println(x_zone);
+      // serial_println(y_zone);
       
       // Process movement with debouncing
       if (debounceCounter > 0) {
@@ -128,15 +129,21 @@ int Joystick_Tick(int state) {
       if (press && !prevPress) {
         // if pressed, toggle the revealed state
         if (!grid[gridX][gridY].revealed) {
-          grid[gridX][gridY].revealed = !grid[gridX][gridY].revealed;
-          grid[gridX][gridY].selected = false;
+          grid[gridX][gridY].revealed = true;
+          // grid[gridX][gridY].selected = false;
+          serial_println("Clicked: (");
+          serial_println(gridX);
+          serial_println(", ");
+          serial_println(gridY);
+          serial_println(") Status: ");
+          serial_println(grid[gridX][gridY].status);
         }
 
       }
       
-      serial_println(gridX);
-      serial_println(gridY);
-      serial_println(press && !prevPress);
+      // serial_println(gridX);
+      // serial_println(gridY);
+      // serial_println(press && !prevPress);
 
 
 
@@ -174,11 +181,15 @@ int main() {
   // ADC initialization
   ADC_init();
 
-  // LCD initialization
-  lcdInit();
+  // // LCD initialization
+  // lcdInit();
 
   // serial initialization
   serial_init(9600);
+
+  // // Initialize grid with random mines
+
+  // initGrid();
 
   // concurrent fsm task initialization
   tasks[0].state = LCD_Init; // Task initial state

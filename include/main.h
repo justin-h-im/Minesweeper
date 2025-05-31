@@ -9,11 +9,11 @@
 // enums for cell status
 typedef enum {
     EMPTY = 0,
-    NUMBER_1,
-    NUMBER_2,
-    NUMBER_3,
-    EXPLODED_MINE,
-    FLAG
+    NUMBER_1 = 1,
+    NUMBER_2 = 2,
+    NUMBER_3 = 3,
+    EXPLODED_MINE = 4,
+    FLAG = 5
 } CellStatus;
 
 // structs
@@ -33,6 +33,7 @@ typedef struct _cell {
 // function defines
 void gpioInit();
 void lcdInit();
+void initGrid();  // Add grid initialization function
 void drawSquare(uint8_t x0, uint8_t y0, const uint16_t *gfx); // Changed parameter type
 void drawScreen();
 uint16_t readGraphicPixel(const uint16_t *gfx, uint8_t row, uint8_t col); // Helper function for PROGMEM
@@ -293,6 +294,7 @@ const uint16_t PROGMEM number3SelectedGrid[16][16] = {
 uint8_t gridX = 0;
 uint8_t gridY = 0;
 
+
 // Helper function to read a pixel from PROGMEM graphics
 uint16_t readGraphicPixel(const uint16_t *gfx, uint8_t row, uint8_t col) {
     return pgm_read_word(&gfx[row * 16 + col]);
@@ -394,6 +396,96 @@ void lcdInit() {
     }
 }
 
+// Grid initialization with random mine placement
+void initGrid() {
+    // Initialize all cells to empty first
+    for (int i = 0; i < ROWS; ++i) {
+        for (int j = 0; j < COLS; ++j) {
+            grid[i][j].status = EMPTY;
+            grid[i][j].revealed = false;
+            grid[i][j].flagged = false;
+            grid[i][j].selected = false;
+            grid[i][j].gfx = (const uint16_t*) emptyUnrevealedGrid;
+        }
+    }
+    
+    // Place 7 random mines
+    int minesPlaced = 0;
+    while (minesPlaced < 7) {
+        // Generate random position (using simple LFSR for randomness)
+        static uint16_t lfsr = 0xACE1;  // Seed for random number
+        lfsr = (lfsr >> 1) ^ (-(lfsr & 1) & 0xB400);  // 16-bit LFSR
+        
+        uint8_t x = lfsr % ROWS;      // Get x coordinate (0-7)
+        uint8_t y = (lfsr / ROWS) % COLS;  // Get y coordinate (0-7)
+        
+        // Check if position is already a mine
+        if (grid[x][y].status != EXPLODED_MINE) {
+            grid[x][y].status = EXPLODED_MINE;
+            minesPlaced++;
+            serial_println(x);
+            serial_println(y);
+            serial_println(grid[x][y].status);
+        }
+    }
+    
+    // Calculate numbers for non-mine cells
+    for (int i = 0; i < ROWS; ++i) {
+        for (int j = 0; j < COLS; ++j) {
+            if (grid[i][j].status != EXPLODED_MINE) {
+                // Count adjacent mines
+                uint8_t mineCount = 0;
+                
+                // Check all 8 surrounding cells
+                for (int di = -1; di <= 1; di++) {
+                    for (int dj = -1; dj <= 1; dj++) {
+                        if (di == 0 && dj == 0) continue; // Skip center cell
+                        
+                        int ni = i + di;
+                        int nj = j + dj;
+                        
+                        // Check bounds and if neighbor is a mine
+                        if (ni >= 0 && ni < ROWS && nj >= 0 && nj < COLS) {
+                            if (grid[ni][nj].status == EXPLODED_MINE) {
+                                mineCount++;
+                            }
+                        }
+                    }
+                }
+                
+                // Set the cell status based on mine count
+                switch (mineCount) {
+                    case 0:
+                        grid[i][j].status = EMPTY;
+                        break;
+                    case 1:
+                        grid[i][j].status = NUMBER_1;
+                        break;
+                    case 2:
+                        grid[i][j].status = NUMBER_2;
+                        break;
+                    case 3:
+                        grid[i][j].status = NUMBER_3;
+                        break;
+                    default:
+                        // For counts > 3, just use NUMBER_3 (or you can add more numbers)
+                        grid[i][j].status = NUMBER_3;
+                        break;
+                }
+            }
+        }
+    }
+    serial_println("--- Initialized Grid Status ---");
+    for (uint8_t i = 0; i < ROWS; i++) {
+        for (uint8_t j = 0; j < COLS; j++) {
+            serial_println(grid[i][j].status);
+            serial_println(" ");
+        }
+        serial_println(""); // New line after each row
+    }
+    serial_println("-------------------------------");
+}
+
 // draws an individual 16 x 16 square
 // code: 0 = no mines, 1 = number 1, 2 = number 2, 3 = number 3, 4 = exploded mine, 5 = flag
 void drawSquare(uint8_t x0, uint8_t y0, const uint16_t *gfx) {
@@ -425,26 +517,71 @@ void drawScreen() {
     // draw the screen
     for (uint8_t j = 0; j < 8; ++j) {
         for (uint8_t i = 0; i < 8; ++i) {
-            const uint16_t *g = (const uint16_t*)emptyUnrevealedGrid;
-            if (grid[i][j].selected) {
-                if (grid[i][j].revealed) {
-                    g = (const uint16_t*)emptyRevealedSelectedGrid;
-                    if (grid[i][j].status == NUMBER_1) { g = (const uint16_t*) number1SelectedGrid; }
-                    else if (grid[i][j].status == NUMBER_2) { g = (const uint16_t*) number2SelectedGrid; }
-                    else if (grid[i][j] .status == NUMBER_3) { g = (const uint16_t*) number3SelectedGrid; }
+            const uint16_t *g;
+
+            // Determine which graphic to show
+            if (grid[i][j].revealed) {
+                if (grid[i][j].selected) {
+                    switch (grid[i][j].status) {
+                    case EMPTY:
+                        g = (const uint16_t*)emptyRevealedSelectedGrid;
+                        break;
+                    case NUMBER_1:
+                        g = (const uint16_t*)number1SelectedGrid;
+                        break;
+                    case NUMBER_2:
+                        g = (const uint16_t*)number2SelectedGrid;
+                        break;
+                    case NUMBER_3:
+                        g = (const uint16_t*)number3SelectedGrid;
+                        break;
+                    case EXPLODED_MINE:
+                        g = (const uint16_t*)number2Grid; // Use number2 as mine graphic for now
+                        break;
+                    case FLAG:
+                        g = (const uint16_t*)number3Grid; // Use number3 as flag graphic for now
+                        break;
+                    default:
+                        g = (const uint16_t*)emptyRevealedGrid;
+                        break;
+                    }
                 }
+
                 else {
-                    g = (const uint16_t*)emptyUnrevealedSelectedGrid;
+                    // Cell is revealed, show the actual content
+                    switch (grid[i][j].status) {
+                        case EMPTY:
+                            g = (const uint16_t*)emptyRevealedGrid;
+                            break;
+                        case NUMBER_1:
+                            g = (const uint16_t*)number1Grid;
+                            break;
+                        case NUMBER_2:
+                            g = (const uint16_t*)number2Grid;
+                            break;
+                        case NUMBER_3:
+                            g = (const uint16_t*)number3Grid;
+                            break;
+                        case EXPLODED_MINE:
+                            g = (const uint16_t*)number2Grid; // Use number2 as mine graphic for now
+                            break;
+                        case FLAG:
+                            g = (const uint16_t*)number3Grid; // Use number3 as flag graphic for now
+                            break;
+                        default:
+                            g = (const uint16_t*)emptyRevealedGrid;
+                            break;
+                    }
                 }
-            }
+
+            } 
+
             else {
-                if (grid[i][j].revealed) {
-                    g = (const uint16_t*)emptyRevealedGrid;
-                }
-                else {
-                    g = (const uint16_t*)emptyUnrevealedGrid;
-                }
+                if (grid[i][j].selected) { g = (const uint16_t*) emptyUnrevealedSelectedGrid; }
+                else { g = (const uint16_t*) emptyUnrevealedGrid; }
             }
+
+            
             int x0 = (16 * i) + 4; // x0 coordinate of the square
             int y0 = (16 * j) + 4; // y0 coordinate of the square
             drawSquare(x0, y0, g);
