@@ -353,7 +353,7 @@ void drawScreen() {
             }
 
             
-            int x0 = (16 * i) + 3; // x0 coordinate of the square
+            int x0 = (16 * i) + 2; // x0 coordinate of the square
             int y0 = (16 * j) + 3; // y0 coordinate of the square
             drawSquare(x0, y0, g);
         }
