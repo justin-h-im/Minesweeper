@@ -21,11 +21,12 @@ typedef struct _task{
 } task;
 
 // task array size define
-#define NUM_TASKS 2
+#define NUM_TASKS 3
 
 // period definitions
 const unsigned long LCD_PERIOD = 20;
 const unsigned long JOYSTICK_PERIOD = 30;
+const unsigned long GAME_PERIOD = 50;
 const unsigned long GCD_PERIOD = 10;
 
 // task array
@@ -34,6 +35,7 @@ task tasks[NUM_TASKS];
 // task enums
 enum LCD_States { LCD_Init, LCD_Display };
 enum Joystick_States { Joystick_Run };
+enum Game_States { Game_Run, Game_Lose, Game_Won };
 
 // task definitions
 int LCD_Tick(int state) {
@@ -46,10 +48,14 @@ int LCD_Tick(int state) {
       break;
     // within here, update depending on inputs from joystick, buttons, etc
     case LCD_Display:
+      if (gameLost) { fillRect(4, 4, 131, 131, RED); }
+      else {
+        // display something on the LCD
+        drawScreen();
+      }
 
-      // display something on the LCD
-      drawScreen();
-      state = LCD_Display; // Stay in this state
+
+      state = LCD_Display;
       break;
     default:
       break;
@@ -58,28 +64,29 @@ int LCD_Tick(int state) {
 }
 
 int Joystick_Tick(int state) {
+
   static uint8_t prevGridX = 0;
   static uint8_t prevGridY = 0;
   static uint8_t prevPress = 0;
+  static uint16_t pressDurationCounter = 0;
+  static bool longPressDetected = false;
   static uint8_t debounceCounter = 0;
-  static uint16_t x_filter = 512;  // Running average for X
-  static uint16_t y_filter = 512;  // Running average for Y
+  static uint16_t x_filter = 512;
+  static uint16_t y_filter = 512;
   uint8_t press = !GetBit(PINC,2);
 
   switch (state) {
     case Joystick_Run:
-      // Read raw ADC values
       uint16_t x_raw = ADC_read(JOYSTICK_VRX);
       uint16_t y_raw = ADC_read(JOYSTICK_VRY);
       
-      // Simple low-pass filter to reduce noise
       x_filter = (x_filter * 3 + x_raw) / 4;
       y_filter = (y_filter * 3 + y_raw) / 4;
       
-      // Use wider dead zones for more stable operation
-      // Create 5 zones: 0=left/up, 1=dead, 2=center, 3=dead, 4=right/down
-      uint8_t x_zone = 2; // Default to center
-      uint8_t y_zone = 2; // Default to center
+
+      // 0=left/up, 1=dead, 2=center, 3=dead, 4=right/down
+      uint8_t x_zone = 2;
+      uint8_t y_zone = 2; 
       
       if (x_filter < 300) {
         x_zone = 0;  // Left
@@ -93,69 +100,89 @@ int Joystick_Tick(int state) {
         y_zone = 4;  // Down
       }
       
-      // // Debug output
-      // serial_println(x_zone);
-      // serial_println(y_zone);
-      
-      // Process movement with debouncing
       if (debounceCounter > 0) {
         debounceCounter--;
       } else {
-        // X movement with proper bounds
-        if (x_zone == 4 && gridX < 7) {  // Right
+        if (x_zone == 4 && gridX < 7) {
           gridX++;
-          debounceCounter = 3; // Longer debounce for smoother movement
-        } else if (x_zone == 0 && gridX > 0) {  // Left
+          debounceCounter = 3; 
+        } else if (x_zone == 0 && gridX > 0) {
           gridX--;
           debounceCounter = 3;
         }
         
-        // Y movement with proper bounds
-        if (y_zone == 4 && gridY < 7) {  // Down
+        if (y_zone == 4 && gridY < 7) {
           gridY++;
           debounceCounter = 3;
-        } else if (y_zone == 0 && gridY > 0) {  // Up
+        } else if (y_zone == 0 && gridY > 0) {
           gridY--;
           debounceCounter = 3;
         }
       }
 
 
-      // Clear previous selection and set new one
       grid[prevGridX][prevGridY].selected = false;
       grid[gridX][gridY].selected = true;
-      
-      // Check if the joystick is pressed
-      if (press && !prevPress) {
-        // if pressed, toggle the revealed state
-        if (!grid[gridX][gridY].revealed) {
-          grid[gridX][gridY].revealed = true;
-          // grid[gridX][gridY].selected = false;
-          serial_println("Clicked: (");
-          serial_println(gridX);
-          serial_println(", ");
-          serial_println(gridY);
-          serial_println(") Status: ");
-          serial_println(grid[gridX][gridY].status);
+    
+
+      if (press) {
+        if (pressDurationCounter < 0xFFFF) {
+            pressDurationCounter++;
         }
 
-      }
+        if (pressDurationCounter >= 10 && !longPressDetected) {
+            if (!grid[gridX][gridY].revealed) {
+                grid[gridX][gridY].flagged = !grid[gridX][gridY].flagged;
+                serial_println("Long Press: Toggled Flag at (");
+                serial_println(gridX);
+                serial_println(", ");
+                serial_println(gridY);
+                serial_println(")");
+            }
+            longPressDetected = true;
+        }
+      } 
+      else {
+        if (prevPress && !longPressDetected) {
+            if (!grid[gridX][gridY].revealed && !grid[gridX][gridY].flagged) {
+              grid[gridX][gridY].revealed = true;
+            }
+        }
+        pressDurationCounter = 0;
+        longPressDetected = false;
       
-      // serial_println(gridX);
-      // serial_println(gridY);
-      // serial_println(press && !prevPress);
+        serial_println(gridX);
+        serial_println(gridY);
+        serial_println(press && !prevPress);
 
-
+      }
 
       state = Joystick_Run; 
       break;
-    default:
-      break;
-  }
+        default:
+          break;
+      }
   prevPress = press;
   prevGridX = gridX;
   prevGridY = gridY;
   return state;
+}
+
+int Game_Tick(int state) {
+  static int numMines = 0;
+
+
+  switch (state) {
+    case Game_Run:
+      if (gameLost) { state = Game_Lose; }
+      break;
+
+    case Game_Won:
+      break;
+
+    case Game_Lose:
+      fillRect(0, 0, 127, 127, RED);
+  }
 }
 
 // executes tasks
@@ -181,15 +208,8 @@ int main() {
   // ADC initialization
   ADC_init();
 
-  // // LCD initialization
-  // lcdInit();
-
   // serial initialization
   serial_init(9600);
-
-  // // Initialize grid with random mines
-
-  // initGrid();
 
   // concurrent fsm task initialization
   tasks[0].state = LCD_Init; // Task initial state
@@ -201,6 +221,11 @@ int main() {
   tasks[1].period = JOYSTICK_PERIOD; // Task period
   tasks[1].elapsedTime = tasks[1].period; // Task elapsed time
   tasks[1].TickFct = &Joystick_Tick; // Task tick function
+
+  tasks[2].state = Game_Run; // Task initial state
+  tasks[2].period = GAME_PERIOD; // Task period
+  tasks[2].elapsedTime = tasks[2].period; // Task elapsed time
+  tasks[2].TickFct = &Game_Tick; // Task tick function
 
   // timer initialization
   TimerSet(GCD_PERIOD);

@@ -3,6 +3,7 @@
 #include "periph.h"
 #include "serialATmega.h"
 #include "timerISR.h"
+#include "graphics.h"
 #include <avr/pgmspace.h>
 #include <stdint.h>
 
@@ -27,16 +28,17 @@ typedef struct _cell {
     bool revealed = false;
     bool flagged = false;
     bool selected = false;
-    const uint16_t *gfx; // Changed to const uint16_t* to point to PROGMEM arrays
+    const uint16_t *gfx;
 } cell;
 
 // function defines
 void gpioInit();
 void lcdInit();
-void initGrid();  // Add grid initialization function
-void drawSquare(uint8_t x0, uint8_t y0, const uint16_t *gfx); // Changed parameter type
+void initGrid();
+void drawSquare(uint8_t x0, uint8_t y0, const uint16_t *gfx);
 void drawScreen();
-uint16_t readGraphicPixel(const uint16_t *gfx, uint8_t row, uint8_t col); // Helper function for PROGMEM
+uint16_t readGraphicPixel(const uint16_t *gfx, uint8_t row, uint8_t col);
+void fillRect(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint16_t color);
 
 // pin defines
 // Port B
@@ -74,228 +76,17 @@ uint16_t readGraphicPixel(const uint16_t *gfx, uint8_t row, uint8_t col); // Hel
 #define ROWS 8
 #define COLS 8
 
-// define colors (BGR)
-#define BLACK 0x0000
-#define BLUE 0x001F
-#define RED 0xF800
-#define GREEN 0x07E0
-#define YELLOW 0xFFE0
-#define BROWN 0x7B00
-#define PURPLE 0xF81F
+
 
 // global variables
 cell grid[8][8]; // 8x8 grid of cells
-
-// Graphics stored in PROGMEM (flash memory instead of SRAM)
-
-// not revealed, not selected
-const uint16_t PROGMEM emptyUnrevealedGrid[16][16] = {
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
-// not revealed, but selected
-const uint16_t PROGMEM emptyUnrevealedSelectedGrid[16][16] = {
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
-// revealed empty grid, not selected
-const uint16_t PROGMEM emptyRevealedGrid[16][16] = {
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
-// revealed empty grid, but selected 
-const uint16_t PROGMEM emptyRevealedSelectedGrid[16][16] = {
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
-// revealed, 1 mine in proximity, not selected
-const uint16_t PROGMEM number1Grid[16][16] = {
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BLUE, BLUE, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
-// revealed, 1 mine in proximity, but selected
-const uint16_t PROGMEM number1SelectedGrid[16][16] = {
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BLUE, BLUE, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BLUE, BLUE, BLUE, BLUE, BLUE, BLUE, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
-// revealed, 2 mines in proximity, not selected
-const uint16_t PROGMEM number2Grid[16][16] = {
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, PURPLE, PURPLE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, BROWN, BROWN, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
-// revealed, 2 mines in proximity, but selected
-const uint16_t PROGMEM number2SelectedGrid[16][16] = {
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, PURPLE, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, PURPLE, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, PURPLE, PURPLE, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, PURPLE, PURPLE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, PURPLE, PURPLE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, PURPLE, PURPLE, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BROWN, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, PURPLE, BROWN, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
-// revealed, 3 mines in proximity, not selected
-const uint16_t PROGMEM number3Grid[16][16] = {
-    // TODO: Add number 3 graphic data
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
-
-// revealed, 3 mines in proximity, not selected
-const uint16_t PROGMEM number3SelectedGrid[16][16] = {
-    // TODO: Add number 3 graphic data
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BROWN, BLACK },
-    { BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK, BLACK },
-};
-
 uint8_t gridX = 0;
 uint8_t gridY = 0;
+bool gameLost = false;
+bool gameWon = false;
 
 
-// Helper function to read a pixel from PROGMEM graphics
+// reads pixel from progmem
 uint16_t readGraphicPixel(const uint16_t *gfx, uint8_t row, uint8_t col) {
     return pgm_read_word(&gfx[row * 16 + col]);
 }
@@ -396,9 +187,8 @@ void lcdInit() {
     }
 }
 
-// Grid initialization with random mine placement
+// grid initialization
 void initGrid() {
-    // Initialize all cells to empty first
     for (int i = 0; i < ROWS; ++i) {
         for (int j = 0; j < COLS; ++j) {
             grid[i][j].status = EMPTY;
@@ -409,17 +199,16 @@ void initGrid() {
         }
     }
     
-    // Place 7 random mines
+    // random mine placement
     int minesPlaced = 0;
     while (minesPlaced < 7) {
-        // Generate random position (using simple LFSR for randomness)
-        static uint16_t lfsr = 0xACE1;  // Seed for random number
-        lfsr = (lfsr >> 1) ^ (-(lfsr & 1) & 0xB400);  // 16-bit LFSR
+        static uint16_t lfsr = 0xACE1; // randomly chosen seed
+        lfsr = (lfsr >> 1) ^ (-(lfsr & 1) & 0xB400); 
         
-        uint8_t x = lfsr % ROWS;      // Get x coordinate (0-7)
-        uint8_t y = (lfsr / ROWS) % COLS;  // Get y coordinate (0-7)
+        uint8_t x = lfsr % ROWS; 
+        uint8_t y = (lfsr / ROWS) % COLS; 
         
-        // Check if position is already a mine
+        // check if position is already a mine
         if (grid[x][y].status != EXPLODED_MINE) {
             grid[x][y].status = EXPLODED_MINE;
             minesPlaced++;
@@ -429,22 +218,18 @@ void initGrid() {
         }
     }
     
-    // Calculate numbers for non-mine cells
+    // calculate numbers for non-mine cells
     for (int i = 0; i < ROWS; ++i) {
         for (int j = 0; j < COLS; ++j) {
             if (grid[i][j].status != EXPLODED_MINE) {
-                // Count adjacent mines
                 uint8_t mineCount = 0;
                 
-                // Check all 8 surrounding cells
                 for (int di = -1; di <= 1; di++) {
                     for (int dj = -1; dj <= 1; dj++) {
-                        if (di == 0 && dj == 0) continue; // Skip center cell
-                        
+                        if (di == 0 && dj == 0) continue; 
                         int ni = i + di;
                         int nj = j + dj;
                         
-                        // Check bounds and if neighbor is a mine
                         if (ni >= 0 && ni < ROWS && nj >= 0 && nj < COLS) {
                             if (grid[ni][nj].status == EXPLODED_MINE) {
                                 mineCount++;
@@ -453,7 +238,6 @@ void initGrid() {
                     }
                 }
                 
-                // Set the cell status based on mine count
                 switch (mineCount) {
                     case 0:
                         grid[i][j].status = EMPTY;
@@ -468,28 +252,17 @@ void initGrid() {
                         grid[i][j].status = NUMBER_3;
                         break;
                     default:
-                        // For counts > 3, just use NUMBER_3 (or you can add more numbers)
                         grid[i][j].status = NUMBER_3;
                         break;
                 }
             }
         }
     }
-    serial_println("--- Initialized Grid Status ---");
-    for (uint8_t i = 0; i < ROWS; i++) {
-        for (uint8_t j = 0; j < COLS; j++) {
-            serial_println(grid[i][j].status);
-            serial_println(" ");
-        }
-        serial_println(""); // New line after each row
-    }
-    serial_println("-------------------------------");
 }
 
 // draws an individual 16 x 16 square
 // code: 0 = no mines, 1 = number 1, 2 = number 2, 3 = number 3, 4 = exploded mine, 5 = flag
 void drawSquare(uint8_t x0, uint8_t y0, const uint16_t *gfx) {
-  // 1) Set the 16×16 window on the display:
   spiWriteCommand(CASET);
   spiWriteData(0); spiWriteData(x0);
   spiWriteData(0); spiWriteData(x0 + 15);
@@ -497,13 +270,8 @@ void drawSquare(uint8_t x0, uint8_t y0, const uint16_t *gfx) {
   spiWriteData(0); spiWriteData(y0);
   spiWriteData(0); spiWriteData(y0 + 15);
 
-//   graphic *gfx = &emptyUnrevealedGrid; // default graphic
-//   if (grid[x0][y0].selected) gfx = &number1Grid;
 
-  // 2) Start RAM write:
   spiWriteCommand(RAMWR);
-
-  // 3) Stream each pixel in row-major order:
   for (uint8_t row = 0; row < 16; ++row) {
     for (uint8_t col = 0; col < 16; ++col) {
       uint16_t color = readGraphicPixel(gfx, row, col);
@@ -519,7 +287,7 @@ void drawScreen() {
         for (uint8_t i = 0; i < 8; ++i) {
             const uint16_t *g;
 
-            // Determine which graphic to show
+            // determine which graphic to show
             if (grid[i][j].revealed) {
                 if (grid[i][j].selected) {
                     switch (grid[i][j].status) {
@@ -536,19 +304,20 @@ void drawScreen() {
                         g = (const uint16_t*)number3SelectedGrid;
                         break;
                     case EXPLODED_MINE:
-                        g = (const uint16_t*)number2Grid; // Use number2 as mine graphic for now
+                        g = (const uint16_t*)explosionMine1pxGrid;
+                        gameLost = true;
                         break;
                     case FLAG:
-                        g = (const uint16_t*)number3Grid; // Use number3 as flag graphic for now
+                        g = (const uint16_t*)flagSelectedGrid;
                         break;
                     default:
                         g = (const uint16_t*)emptyRevealedGrid;
                         break;
                     }
+                    if (grid[i][j].flagged) { g = ( const uint16_t*) flagGrid; }
                 }
-
                 else {
-                    // Cell is revealed, show the actual content
+                    // cell is revealed, show the actual content
                     switch (grid[i][j].status) {
                         case EMPTY:
                             g = (const uint16_t*)emptyRevealedGrid;
@@ -563,10 +332,8 @@ void drawScreen() {
                             g = (const uint16_t*)number3Grid;
                             break;
                         case EXPLODED_MINE:
-                            g = (const uint16_t*)number2Grid; // Use number2 as mine graphic for now
-                            break;
-                        case FLAG:
-                            g = (const uint16_t*)number3Grid; // Use number3 as flag graphic for now
+                            g = (const uint16_t*)explosionMine1pxGrid;
+                            gameLost = true;
                             break;
                         default:
                             g = (const uint16_t*)emptyRevealedGrid;
@@ -577,7 +344,11 @@ void drawScreen() {
             } 
 
             else {
-                if (grid[i][j].selected) { g = (const uint16_t*) emptyUnrevealedSelectedGrid; }
+                if (grid[i][j].selected) { 
+                    if (grid[i][j].flagged) { g = (const uint16_t*) flagSelectedGrid; }
+                    else { g = (const uint16_t*) emptyUnrevealedSelectedGrid; }
+                }
+                else if (grid[i][j].flagged) { g = (const uint16_t*) flagGrid; }
                 else { g = (const uint16_t*) emptyUnrevealedGrid; }
             }
 
@@ -587,4 +358,25 @@ void drawScreen() {
             drawSquare(x0, y0, g);
         }
     }
+}
+
+// fills the enture screen wth a color
+void fillRect(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint16_t color) {
+  uint32_t count = (uint32_t)(x1 - x0 + 1) * (y1 - y0 + 1);
+
+  // Set window
+  spiWriteCommand(CASET);
+  spiWriteData(0x00); spiWriteData(x0);
+  spiWriteData(0x00); spiWriteData(x1);
+
+  spiWriteCommand(RASET);
+  spiWriteData(0x00); spiWriteData(y0);
+  spiWriteData(0x00); spiWriteData(y1);
+
+  // Write pixels
+  spiWriteCommand(RAMWR);
+  for (uint32_t i = 0; i < count; ++i) {
+    spiWriteData(color >> 8);
+    spiWriteData(color & 0xFF);
+  }
 }
